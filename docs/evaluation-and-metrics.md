@@ -136,7 +136,7 @@ Hand-computed expected values. The build-time audit (BP-4) must reproduce these 
 | **TC-3** | kwh=100, grid=india | **82.00** | 100 × 0.82 |
 | **TC-4** | kwh=100, grid=us, offset=50% | loc **37.00** / mkt **18.50** | 100×0.37 ; ×(1−0.5) |
 | **TC-5** | gbTransferred=50 | **3.00** | 50 × 0.06 |
-| **TC-6** | gasolineKm=40, kwh=10(global), gb=20 | **12.18** | 6.8 + 4.78 + 1.20 |
+| **TC-6** | gasolineKm=40, kwh=10(global), gb=20 | **12.78** | 6.8 + 4.78 + 1.20 |
 | **TC-7** | motorbikeKm=50, busKm=20 | **6.60** | (50 × 0.10) + (20 × 0.08) |
 | **TC-8** | laptopHr=10, desktopHr=5, grid=global | **0.72** | ((10 × 0.05) + (5 × 0.20)) × 0.478 |
 
