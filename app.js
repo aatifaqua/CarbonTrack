@@ -55,6 +55,8 @@ let state = {
 // ==========================================
 // Context, Eco-Actions & Tiers (deterministic, cited in docs/04 §1.2–1.3)
 // ==========================================
+const DAYS_PER_YEAR = 365; // for annual per-capita averages → per-day comparisons
+
 // Annual per-capita averages (kg CO2e/yr). Sources: IEA / World Bank / EDGAR; Paris-aligned target.
 const GLOBAL_AVERAGES = { paris: 2300, world: 4700, us: 14700, eu: 6800, india: 1900, china: 8000 };
 // Map a grid region to the closest published annual average.
@@ -62,8 +64,10 @@ const REGION_AVG_KEY = {
     us: 'us', india: 'india', china: 'china', global: 'world',
     eu: 'eu', france: 'eu', germany: 'eu', italy: 'eu', spain: 'eu', uk: 'eu'
 };
-function dailyTarget() { return GLOBAL_AVERAGES.paris / 365; }              // ~6.3 kg/day
-function regionDailyAvg(region) { return GLOBAL_AVERAGES[REGION_AVG_KEY[region] || 'world'] / 365; }
+/** @returns {number} Paris-aligned per-capita daily carbon budget (~6.3 kg CO2e/day). */
+function dailyTarget() { return GLOBAL_AVERAGES.paris / DAYS_PER_YEAR; }
+/** @returns {number} Average daily footprint for the region behind the selected grid (world fallback). */
+function regionDailyAvg(region) { return GLOBAL_AVERAGES[REGION_AVG_KEY[region] || 'world'] / DAYS_PER_YEAR; }
 
 // Curated reduction actions — illustrative daily avoidance (kg CO2e/day), cited in docs/04 §1.2.
 const ECO_ACTIONS = [
@@ -90,7 +94,9 @@ const TIERS = [
     { id: 'tree', label: 'Tree', icon: 'tree-deciduous', min: 300 },
     { id: 'forest', label: 'Forest Guardian', icon: 'mountain', min: 750 }
 ];
+/** @returns {object} The highest eco-tier reached for `kg` cumulative savings. */
 function tierFor(kg) { let t = TIERS[0]; for (const x of TIERS) if (kg >= x.min) t = x; return t; }
+/** @returns {object|null} The next tier above `kg`, or null if already at the top. */
 function nextTier(kg) { for (const x of TIERS) if (x.min > kg) return x; return null; }
 
 // Per-day action completions live in their own key (decoupled from inputs/computeTotals).
@@ -98,12 +104,16 @@ const ACTIONS_KEY = 'ct_actions';
 function loadActions() { try { return JSON.parse(localStorage.getItem(ACTIONS_KEY)) || {}; } catch (e) { return {}; } }
 function persistActions(a) { localStorage.setItem(ACTIONS_KEY, JSON.stringify(a)); }
 function dayCompletions(date) { return loadActions()[date] || []; }
+/** @returns {number} kg CO2e avoided on `date` (sum of that day's completed-action savings). */
 function daySaved(date) { return dayCompletions(date).reduce((s, id) => s + (ECO_ACTION_MAP[id] ? ECO_ACTION_MAP[id].save : 0), 0); }
+/** @returns {number} kg CO2e avoided across every logged day — the lifetime verified saving. */
 function cumulativeSaved() {
-    const a = loadActions(); let s = 0;
+    const a = loadActions();
+    let s = 0;
     for (const d in a) s += a[d].reduce((x, id) => x + (ECO_ACTION_MAP[id] ? ECO_ACTION_MAP[id].save : 0), 0);
     return s;
 }
+/** @returns {number} Consecutive days (ending today, or yesterday if today is empty) with ≥1 completion. */
 function currentStreak() {
     const a = loadActions();
     let cursor = todayStr();
@@ -132,10 +142,14 @@ function toggleActionDone(id) {
 const LOGS_KEY = 'ct_logs';
 const SETTINGS_KEY = 'ct_settings';
 function pad2(n) { return String(n).padStart(2, '0'); }
+/** @returns {string} A Date as a local `YYYY-MM-DD` key (the canonical log key format). */
 function dateToStr(d) { return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
+/** @returns {string} Today's local date key. */
 function todayStr() { return dateToStr(new Date()); }
 function parseDateStr(s) { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); }
+/** @returns {string} The date key `days` away from `s` (negative = past). */
 function shiftDate(s, days) { const d = parseDateStr(s); d.setDate(d.getDate() + days); return dateToStr(d); }
+/** @returns {object} A fresh, fully-zeroed inputs object (every sector field present). */
 function blankInputs() {
     return {
         travel: { gasolineKm: 0, evKm: 0, flightKm: 0, trainKm: 0, motorbikeKm: 0, busKm: 0 },
@@ -156,8 +170,11 @@ function normalizeInputs(src) { return mergeInputs(blankInputs(), src); }
 // Units (canonical storage = kilometres)
 // ==========================================
 const KM_PER_MILE = 1.609344;
+/** @returns {number} A canonical km value converted to the user's display unit (km or mi). */
 function toDisplay(km) { return state.settings.unit === 'mi' ? km / KM_PER_MILE : km; }
+/** @returns {number} A displayed value converted back to canonical km for storage. */
 function fromDisplay(v) { return state.settings.unit === 'mi' ? v * KM_PER_MILE : v; }
+/** @returns {string} A number trimmed to ≤2 decimals, with integers kept clean (no trailing `.0`). */
 function fmtNum(n) { return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100); }
 const DIST_FIELDS = [
     ['inputGasoline', 'gasolineKm'], ['inputEv', 'evKm'],
@@ -173,23 +190,37 @@ const stateBroker = {
     subscribe(fn) { this.listeners.push(fn); },
     notify() { this.listeners.forEach(fn => fn(state)); }
 };
+/** Sets a nested property by dot-path, e.g. setDeepValue(state, 'inputs.travel.gasolineKm', 30). */
 function setDeepValue(obj, path, value) {
-    const parts = path.split('.'); let current = obj;
+    const parts = path.split('.');
+    let current = obj;
     for (let i = 0; i < parts.length - 1; i++) current = current[parts[i]];
     current[parts[parts.length - 1]] = value;
 }
+/**
+ * The one mutation entry point: write `value` at `path`, then recalculate, persist, and notify
+ * subscribers (which re-render the DOM). Keeps the unidirectional data flow in a single place.
+ */
 function updateState(path, value) {
     setDeepValue(state, path, value);
-    runCalculations(); saveToStorage(); stateBroker.notify();
+    runCalculations();
+    saveToStorage();
+    stateBroker.notify();
 }
 
 // ==========================================
 // 2. Calculation Engine
 // ==========================================
-// Pure: compute results for ANY inputs object (used for the active day AND the trend).
+/**
+ * GHG-Protocol calculation engine. Pure and side-effect-free — used for the active day, the
+ * trend bars, the lifetime total, and the what-if simulator alike.
+ * @param {object} inputs - an inputs object shaped like `state.inputs` (missing fields treated as 0).
+ * @returns {{travel:number, electricityLocation:number, electricityMarket:number, digital:number,
+ *            totalLocation:number, totalMarket:number}} emissions in kg CO2e.
+ */
 function computeTotals(inputs) {
     const t = inputs.travel, el = inputs.electricity, di = inputs.digital;
-    const n = v => v || 0;
+    const n = v => v || 0; // coerce missing/NaN to 0 so partial logs never produce NaN
     const e_travel = n(t.gasolineKm) * FACTORS.gasoline + n(t.evKm) * FACTORS.ev + n(t.flightKm) * FACTORS.flight
         + n(t.trainKm) * FACTORS.train + n(t.motorbikeKm) * FACTORS.motorbike + n(t.busKm) * FACTORS.bus;
     const deviceKwh = n(el.mobileHr) * FACTORS.devices.mobile + n(el.laptopHr) * FACTORS.devices.laptop + n(el.desktopHr) * FACTORS.devices.desktop;
@@ -288,7 +319,7 @@ function formatEquivalency(kgCO2e, unit) {
 function loadLogs() { try { return JSON.parse(localStorage.getItem(LOGS_KEY)) || {}; } catch (e) { return {}; } }
 function persistLogs(logs) { localStorage.setItem(LOGS_KEY, JSON.stringify(logs)); }
 
-// Sum of every day's footprint (only real YYYY-MM-DD logs; robust to partial older entries).
+/** @returns {number} Sum of every day's footprint (only real YYYY-MM-DD logs; robust to partial entries). */
 function getLifetimeTotal() {
     const logs = loadLogs();
     let total = 0;
@@ -299,12 +330,14 @@ function getLifetimeTotal() {
     return total;
 }
 
+/** Persists the active day's inputs into `ct_logs[selectedDate]` and the settings object. */
 function saveToStorage() {
     const logs = loadLogs();
     logs[state.selectedDate] = state.inputs;     // the active day's working copy
     persistLogs(logs);
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
 }
+/** Hydrates settings + today's inputs from localStorage, migrating any legacy single-snapshot save. */
 function loadFromStorage() {
     // 1. Settings (with one-time migration from the legacy single-snapshot key)
     let rawSettings = localStorage.getItem(SETTINGS_KEY);
@@ -373,6 +406,7 @@ function renderStaticCharts(currentState) {
     `;
 }
 
+/** Renders the Chart.js bar + doughnut (updating in place to avoid per-keystroke destroy/recreate). */
 function renderCharts(currentState) {
     if (currentState.settings.lowCarbonMode) {
         renderStaticCharts(currentState);
@@ -422,6 +456,8 @@ function renderCharts(currentState) {
 // ==========================================
 // 6. Gemini AI Adapter
 // ==========================================
+// The ONLY networked module. Each method maps language ⇄ structured data and never computes
+// emissions. Callers wrap every call in try/catch and fall back to the deterministic path.
 // Cache key for a coach plan — must capture everything the plan depends on (the full sector
 // breakdown + offset + grid), NOT just the total, or a changed breakdown returns a stale plan.
 function coachCacheKey() {
@@ -483,6 +519,7 @@ const geminiAdapter = {
 // ==========================================
 // 7. AI UI Functions
 // ==========================================
+/** Requests (or serves cached) a coach plan and renders it; falls back to static tips on any failure. */
 async function requestAiCoach() {
     if (!state.ai.enabled) return;
     
@@ -574,6 +611,7 @@ function renderStaticTips() {
     if (window.lucide) lucide.createIcons({ root: coachContent });
 }
 
+/** Wires the AI affordances: the key connect/disconnect gate, NL logging submit, and coach refresh. */
 function bindAI() {
     const keyBtn = document.getElementById('geminiConnectBtn'); const keyText = document.getElementById('geminiBtnText');
     if (geminiAdapter.getKey()) { state.ai.enabled = true; keyText.innerText = "Disconnect"; keyBtn.classList.replace('bg-lime-bright', 'bg-surface'); keyBtn.classList.replace('text-charcoal', 'text-brand'); }
@@ -637,6 +675,7 @@ function bindAI() {
 // ==========================================
 // 8. DOM Binding & UI Updates
 // ==========================================
+/** Wires the sector inputs (distance fields unit-aware), the theme toggle, and the Low-Carbon toggle. */
 function bindInputs() {
     const bindNum = (id, path) => {
         const el = document.getElementById(id); if (!el) return;
@@ -739,6 +778,7 @@ function setUnit(unit) {
     refreshCommuteInput();
     stateBroker.notify(); // re-render equivalency (e-bike unit) + charts
 }
+/** Wires the km/mi unit toggle and the daily-commute quick-add (Add my commute / Work week ×5). */
 function bindUnitsAndCommute() {
     document.querySelectorAll('#unitToggle button').forEach(btn => {
         btn.addEventListener('click', () => setUnit(btn.dataset.unit));
@@ -778,6 +818,7 @@ function bindUnitsAndCommute() {
 // ==========================================
 // Day navigation & history
 // ==========================================
+/** Re-syncs every input field from `state.inputs` (used after AI logging and on day switches). */
 function refreshAllInputs() {
     refreshDistanceInputs();
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
@@ -789,6 +830,7 @@ function refreshAllInputs() {
     set('inputDesktopHr', state.inputs.electricity.desktopHr);
     const grid = document.getElementById('inputGrid'); if (grid) grid.value = state.inputs.electricity.gridRegion;
 }
+/** Switches the active day: flushes the current day, loads `dateStr` (future dates are blocked). */
 function loadDay(dateStr) {
     if (!dateStr || dateStr > todayStr()) return;       // future days are blocked
     if (dateStr === state.selectedDate) return;
@@ -825,6 +867,7 @@ function updateDateNav() {
         next.classList.toggle('cursor-not-allowed', atToday);
     }
 }
+/** Wires the date navigator: prev/next arrows, the calendar picker (capped at today), and the Today jump. */
 function bindDateNav() {
     const prev = document.getElementById('prevDayBtn');
     if (prev) prev.addEventListener('click', () => loadDay(shiftDate(state.selectedDate, -1)));
@@ -847,6 +890,7 @@ function syncTrendRange() {
         btn.classList.toggle('text-ink-muted', !active);
     });
 }
+/** Renders the 7/30-day trend as lightweight CSS bars (no canvas) computed from `ct_logs`. */
 function renderTrend() {
     const container = document.getElementById('trendChart');
     if (!container) return;
@@ -893,17 +937,21 @@ function bindTrend() {
 // ==========================================
 // Goal & Context gauge (UNDERSTAND)
 // ==========================================
+const GAUGE_RADIUS = 52;                              // SVG progress-ring radius (matches index.html)
+const GAUGE_CIRCUMFERENCE = 2 * Math.PI * GAUGE_RADIUS;
+/** @returns {string} Short display name for the region behind a grid selection. */
 function regionName(region) {
     const k = REGION_AVG_KEY[region] || 'world';
     return { us: 'US', india: 'India', china: 'China', eu: 'EU', world: 'global' }[k];
 }
+/** Renders the progress-ring gauge + context bar comparing the day to the target and regional average. */
 function renderGauge(cs) {
     const total = cs.results.totalLocation;
     const region = cs.inputs.electricity.gridRegion;
     const avg = regionDailyAvg(region);
     const target = dailyTarget();
     const arc = document.getElementById('gaugeArc');
-    const C = 2 * Math.PI * 52; // circumference for r=52
+    const C = GAUGE_CIRCUMFERENCE;
     if (arc) {
         const frac = Math.max(0, Math.min(1, avg > 0 ? total / avg : 0));
         arc.style.strokeDasharray = C.toFixed(1);
@@ -935,6 +983,7 @@ function renderGauge(cs) {
 // ==========================================
 // Eco-Actions, streak, tier (REDUCE + engage)
 // ==========================================
+/** Renders the eco-stats (streak/cumulative/tier), the daily checklist, and the commit library. */
 function renderActions(cs) {
     const streak = currentStreak(), cum = cumulativeSaved(), tier = tierFor(cum), nt = nextTier(cum);
     const setT = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
@@ -993,7 +1042,8 @@ const SIM_LEVERS = [
     { id: 'green', label: '100% renewable electricity', apply: i => { i.electricity.offsetPercentage = 100; } },
     { id: 'digital', label: 'Cut data use 30%', apply: i => { i.digital.gbTransferred *= 0.7; } }
 ];
-const simState = {};
+const simState = {}; // which what-if levers are currently toggled on
+/** Re-runs the engine on a copy of the inputs with the active levers applied; shows the projection. */
 function renderSimulator(cs) {
     const base = cs.results.totalLocation;
     const sim = normalizeInputs(cs.inputs); // deep copy — never mutate real state
@@ -1006,6 +1056,7 @@ function renderSimulator(cs) {
     setT('simSaved', `−${saved.toFixed(1)} kg (−${pct}%)`);
     const bar = document.getElementById('simBar'); if (bar) bar.style.width = base > 0 ? `${Math.min(100, (projected / base) * 100)}%` : '0%';
 }
+/** Builds the what-if lever checkboxes once and wires them to re-render the projection on change. */
 function bindSimulator() {
     const box = document.getElementById('simLevers');
     if (!box) return;
@@ -1014,6 +1065,7 @@ function bindSimulator() {
     box.querySelectorAll('input[data-sim]').forEach(c => c.addEventListener('change', e => { simState[e.target.dataset.sim] = e.target.checked; renderSimulator(state); }));
 }
 
+/** Toggles Low-Carbon Mode: swaps canvas charts for static CSS bars and freezes animations (via CSS). */
 function applyLowCarbonMode(isLowCarbon) {
     const body = document.body;
     const cBar = document.getElementById('chartBarContainer'); const sBar = document.getElementById('staticBarContainer');
@@ -1056,6 +1108,10 @@ function updateSustainabilityStats() {
     }
 }
 
+/**
+ * The single subscriber of the state broker: re-renders every view from `currentState`.
+ * Called on load and after every `updateState`. Each `renderX` call is independent and idempotent.
+ */
 function updateUI(currentState) {
     const offsetPct = currentState.inputs.electricity.offsetPercentage;
     const offsetLabel = document.getElementById('offsetLabel'); if (offsetLabel) offsetLabel.innerText = `${offsetPct}%`;
@@ -1124,6 +1180,7 @@ function updateUI(currentState) {
 // ==========================================
 // 9. Initialization
 // ==========================================
+/** Entry point (on DOMContentLoaded): hydrate state, wire every control, and do the first render. */
 function init() {
     loadFromStorage();
     if (state.settings.theme) document.documentElement.setAttribute('data-theme', state.settings.theme);
