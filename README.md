@@ -70,7 +70,7 @@ and writes you a personalized reduction plan.**
    └──────────────────────────────────────────────┘
 ```
 
-Full architecture & state schema → [`docs/02-product-spec.md`](docs/product_specs.md).
+Full architecture & state schema → [`docs/product-specs.md`](docs/product_specs.md).
 
 ---
 
