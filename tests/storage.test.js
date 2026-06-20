@@ -58,3 +58,13 @@ test('fmtNum trims noise but keeps integers clean', () => {
   assert.equal(app.fmtNum(24), '24');
   assert.equal(app.fmtNum(14.913), '14.91');
 });
+
+test('getLifetimeTotal sums every daily log (and ignores non-date keys)', () => {
+  const day = (km) => { const i = app.blankInputs(); i.travel.gasolineKm = km; return i; };
+  app.__store['ct_logs'] = JSON.stringify({
+    '2026-06-19': day(100), // 17.00
+    '2026-06-20': day(200), // 34.00
+    'archived-999': day(1000) // stray legacy key → must be ignored
+  });
+  assert.equal(Number(app.getLifetimeTotal().toFixed(2)), 51.0);
+});

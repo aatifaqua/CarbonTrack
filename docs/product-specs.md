@@ -87,6 +87,7 @@ const state = {
     commuteKm: 24,         // user's saved daily commute, for the 1-click quick-add
     commuteMode: 'gasolineKm', // which travel field the commute injects into
     trendRange: 7,         // 7 | 30 — window for the daily-footprint trend
+    viewMode: 'today',     // 'today' | 'total' — big number shows the day vs the lifetime sum
     committedActions: ['bike-short','led','meatless'] // adopted eco-actions (see §13)
   },
   selectedDate: null       // 'YYYY-MM-DD' — the day being viewed/edited (defaults to today)
