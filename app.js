@@ -1,5 +1,19 @@
-// app.js - CarbonTrack AI
-// Offline-first calculator + per-day logs + optional Gemini layer.
+/**
+ * CarbonTrack AI — single-file application logic (no build step, no framework).
+ *
+ * Architecture (see docs/product-specs.md):
+ *   • A single reactive `state` object is the source of truth; `updateState(path, value)`
+ *     mutates it, recalculates, persists, and notifies subscribers (pub/sub).
+ *   • The calculation, equivalency, context, gamification, and simulator logic are PURE and
+ *     deterministic — they never touch the network and are unit-tested in `tests/` via Node.
+ *   • The optional Gemini layer (`geminiAdapter`) only maps language ⇄ structured data; it never
+ *     computes emissions and always degrades gracefully (no key / offline / API error → fallback).
+ *
+ * Persistence (localStorage): `ct_logs` (one entry per day), `ct_settings`, `ct_actions`
+ * (per-day eco-action completions). The API key lives in `ct_gemini_key`, read on demand only.
+ *
+ * The pure functions are exported at the bottom for the test suite when run under Node.
+ */
 
 const FACTORS = {
     gasoline: 0.17, ev: 0.05, flight: 0.15, train: 0.04, motorbike: 0.10, bus: 0.08,
@@ -26,7 +40,7 @@ let state = {
     },
     ai: {
         enabled: false,
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.5-flash',
         lastCoachPlan: null,
         status: 'idle'
     },
@@ -1058,8 +1072,12 @@ function updateSustainabilityStats() {
 }
 
 function updateUI(currentState) {
-    const offsetLabel = document.getElementById('offsetLabel'); if (offsetLabel) offsetLabel.innerText = `${currentState.inputs.electricity.offsetPercentage}%`;
-    const digitalLabel = document.getElementById('digitalLabel'); if (digitalLabel) digitalLabel.innerText = `${currentState.inputs.digital.gbTransferred} GB`;
+    const offsetPct = currentState.inputs.electricity.offsetPercentage;
+    const offsetLabel = document.getElementById('offsetLabel'); if (offsetLabel) offsetLabel.innerText = `${offsetPct}%`;
+    const offsetInput = document.getElementById('inputOffset'); if (offsetInput) offsetInput.setAttribute('aria-valuetext', `${offsetPct}%`);
+    const gb = currentState.inputs.digital.gbTransferred;
+    const digitalLabel = document.getElementById('digitalLabel'); if (digitalLabel) digitalLabel.innerText = `${gb} GB`;
+    const gbInput = document.getElementById('inputGb'); if (gbInput) gbInput.setAttribute('aria-valuetext', `${gb} gigabytes`);
     
     const displayMode = currentState.settings.viewMode || 'today';
     const activeVal = displayMode === 'total' 
@@ -1137,4 +1155,21 @@ function init() {
     if (state.ai.enabled && state.results.totalLocation > 0 && !state.settings.lowCarbonMode) requestAiCoach();
 }
 
-document.addEventListener('DOMContentLoaded', init);
+// Browser only — guarded so the file can also be `require()`d by the Node test suite.
+if (typeof document !== 'undefined' && document.addEventListener) {
+    document.addEventListener('DOMContentLoaded', init);
+}
+
+// Node test harness export — invisible to the browser (no CommonJS there).
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        state,
+        FACTORS, GLOBAL_AVERAGES, REGION_AVG_KEY, ECO_ACTIONS, ECO_ACTION_MAP, TIERS, SIM_LEVERS, KM_PER_MILE,
+        computeTotals, runCalculations, formatDuration, formatEquivalency, templatedExplanation,
+        dateToStr, todayStr, parseDateStr, shiftDate, blankInputs, mergeInputs, normalizeInputs,
+        toDisplay, fromDisplay, fmtNum,
+        dailyTarget, regionDailyAvg, regionName,
+        dayCompletions, daySaved, cumulativeSaved, currentStreak, tierFor, nextTier,
+        loadFromStorage, saveToStorage, loadDay, updateState
+    };
+}

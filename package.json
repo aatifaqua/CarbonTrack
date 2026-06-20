@@ -1,0 +1,10 @@
+{
+  "name": "carbontrack-ai",
+  "version": "1.0.0",
+  "description": "A tiny, offline-first carbon footprint tracker with human-relatable equivalencies and an optional Gemini layer.",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "test": "node --test"
+  }
+}
