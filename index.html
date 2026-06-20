@@ -311,14 +311,11 @@
                         <div class="flex justify-center items-center gap-3 bg-brand/5 px-4 py-1.5 rounded-full border border-brand/10">
                             <span id="labelToday" class="text-[10px] font-bold uppercase tracking-wider text-brand-deep transition-colors">Today's Data</span>
                             <label class="flex items-center cursor-pointer" title="Toggle Today / Lifetime">
-                                <input type="checkbox" id="footprintModeToggle" class="sr-only peer">
+                                <input type="checkbox" id="footprintModeToggle" class="sr-only peer" aria-label="Toggle between today's footprint and the lifetime total">
                                 <div class="relative w-9 h-5 bg-jungle/10 rounded-full peer-checked:bg-brand/30 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-brand after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
                             </label>
                             <span id="labelTotal" class="text-[10px] font-bold uppercase tracking-wider text-ink-muted transition-colors">Lifetime Total</span>
                         </div>
-                        <button id="commitDayBtn" class="px-5 py-2 text-xs font-bold uppercase tracking-wider text-brand-deep bg-brand/10 hover:bg-brand/20 rounded-full transition-colors flex items-center gap-2">
-                            <i data-lucide="calendar-check" class="w-4 h-4 inline-block -mt-0.5"></i> Save Day & Reset
-                        </button>
                     </div>
                 </section>
 
