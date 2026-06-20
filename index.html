@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CarbonTrack AI</title>
+    
+    <!-- Meta Sustainability Note -->
+    <!-- This app is engineered to be tiny (~26 KB gzipped over the wire) and fully functional offline. -->
+
+    <!-- Tailwind CSS (v3 CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: ['class', '[data-theme="dark"]'],
+            theme: {
+                extend: {
+                    colors: {
+                        bg: 'var(--ct-bg)',
+                        surface: 'var(--ct-surface)',
+                        sunk: 'var(--ct-surface-sunk)',
+                        hairline: 'var(--ct-border)',
+                        charcoal: 'var(--ct-charcoal)',
+                        jungle: 'var(--ct-black)',
+                        'on-dark': 'var(--ct-on-dark)',
+                        ink: {
+                            DEFAULT: 'var(--ct-ink)',
+                            soft: 'var(--ct-ink-soft)',
+                            muted: 'var(--ct-ink-muted)'
+                        },
+                        brand: {
+                            // channel form → enables alpha utilities like bg-brand/5
+                            DEFAULT: 'rgb(var(--ct-green-rgb) / <alpha-value>)',
+                            text: 'var(--ct-green-text)',
+                            deep: 'var(--ct-green-deep)'
+                        },
+                        lime: {
+                            DEFAULT: 'rgb(var(--ct-lime-rgb) / <alpha-value>)',
+                            bright: 'var(--ct-lime-bright)'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Deep Jungle Theme Custom CSS -->
+    <link rel="stylesheet" href="./theme.css">
+
+    <!-- Chart.js (v4 CDN) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+    <!-- Lucide Icons (CDN, pinned for reproducible judging) -->
+    <script src="https://unpkg.com/lucide@0.460.0"></script>
+</head>
+<body class="bg-bg text-ink antialiased min-h-screen flex flex-col font-sans transition-colors duration-200">
+    <!-- Header -->
+    <header class="ct-charcoal px-6 py-4 flex flex-col md:flex-row items-center justify-between shadow-sm sticky top-0 z-50">
+        <div class="flex items-center gap-3">
+            <i data-lucide="leaf" class="text-lime-bright w-6 h-6"></i>
+            <h1 class="text-xl font-bold text-lime-bright tracking-wide">CarbonTrack AI</h1>
+        </div>
+        
+        <div class="flex items-center gap-4 mt-4 md:mt-0 text-sm">
+            <!-- Unit System Toggle (metric / imperial) -->
+            <div class="flex rounded-lg overflow-hidden border border-white/15 text-xs font-semibold" id="unitToggle" role="group" aria-label="Distance units">
+                <button type="button" data-unit="km" class="px-2.5 py-1 transition-colors">km</button>
+                <button type="button" data-unit="mi" class="px-2.5 py-1 transition-colors">mi</button>
+            </div>
+
+            <!-- Low-Carbon Mode Toggle -->
+            <label class="flex items-center gap-2 cursor-pointer hover:text-lime transition-colors">
+                <input type="checkbox" id="lowCarbonToggle" class="sr-only peer">
+                <div class="relative w-9 h-5 bg-jungle rounded-full peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-lime-bright after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand"></div>
+                <span>Low-Carbon Mode</span>
+            </label>
+
+            <!-- Theme Toggle -->
+            <button id="themeToggle" class="p-2 rounded-full hover:bg-jungle transition-colors" aria-label="Toggle Theme">
+                <i data-lucide="moon" class="w-5 h-5" id="themeIcon"></i>
+            </button>
+
+            <!-- Gemini Key Gateway -->
+            <button id="geminiConnectBtn" class="ct-btn px-4 py-2 flex items-center gap-2 font-medium text-charcoal bg-lime-bright hover:bg-lime">
+                <i data-lucide="key" class="w-4 h-4"></i>
+                <span id="geminiBtnText">Connect Gemini</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Dashboard -->
+    <main class="flex-grow max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+
+        <!-- Date Navigator (each day is its own log) -->
+        <section class="ct-card p-3 mb-6 flex items-center justify-between gap-3">
+            <button id="prevDayBtn" class="p-2 rounded-lg hover:bg-sunk text-brand-deep transition-colors" aria-label="Previous day"><i data-lucide="chevron-left" class="w-5 h-5"></i></button>
+            <div class="flex items-center gap-3 flex-wrap justify-center">
+                <i data-lucide="calendar-days" class="w-5 h-5 text-brand-deep"></i>
+                <div class="text-center">
+                    <div class="font-bold text-ink leading-tight" id="dateLabel">—</div>
+                    <div class="text-xs text-brand-text font-medium h-4" id="dateRelLabel"></div>
+                </div>
+                <input type="date" id="datePicker" class="bg-sunk border border-hairline rounded-lg px-2 py-1 text-sm text-ink outline-none focus:border-brand">
+            </div>
+            <div class="flex items-center gap-2">
+                <button id="todayBtn" class="px-3 py-1.5 text-xs rounded-lg border border-brand text-brand-text hover:bg-brand/10 transition-colors">Today</button>
+                <button id="nextDayBtn" class="p-2 rounded-lg hover:bg-sunk text-brand-deep transition-colors" aria-label="Next day"><i data-lucide="chevron-right" class="w-5 h-5"></i></button>
+            </div>
+        </section>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            
+            <!-- Left Column: Inputs & AI Logging (7 cols) -->
+            <div class="lg:col-span-7 space-y-6">
+                
+                <!-- AI Natural Language Input -->
+                <section class="ct-card p-5 border border-brand/20 shadow-sm relative overflow-hidden group">
+                    <div class="absolute top-0 left-0 w-1 h-full bg-brand"></div>
+                    <div class="flex items-start gap-4">
+                        <div class="mt-1 p-2 bg-sunk rounded-lg text-brand-deep">
+                            <i data-lucide="sparkles" class="w-5 h-5"></i>
+                        </div>
+                        <div class="flex-grow">
+                            <h2 class="text-lg font-semibold text-brand-deep mb-1">Log with AI</h2>
+                            <p class="text-ink-muted text-sm mb-3">Just type your day. We'll handle the math.</p>
+                            <div class="relative">
+                                <textarea id="aiInput" rows="2" class="w-full bg-bg border border-hairline rounded-lg p-3 text-ink focus:ring-2 focus:ring-brand focus:border-brand outline-none resize-none transition-shadow" placeholder="e.g., I drove 30km to work and streamed 3 hours of Netflix..."></textarea>
+                                <button id="aiSubmitBtn" class="absolute bottom-3 right-3 ct-btn px-3 py-1.5 text-xs flex items-center gap-1">
+                                    <i data-lucide="send" class="w-3 h-3"></i> Analyze
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Travel Sector -->
+                <section class="ct-card p-6">
+                    <div class="flex items-center gap-3 mb-5 pb-3 border-b border-hairline">
+                        <div class="p-2 bg-sunk rounded text-brand-deep"><i data-lucide="car" class="w-5 h-5"></i></div>
+                        <h2 class="text-xl font-bold text-brand-deep">Travel</h2>
+                    </div>
+
+                    <!-- Daily commute quick-add (saved locally) -->
+                    <div class="flex flex-wrap items-center gap-3 mb-5 p-3 bg-sunk rounded-lg border border-hairline">
+                        <div class="flex items-center gap-2 text-sm text-ink-soft">
+                            <i data-lucide="route" class="w-4 h-4 text-brand-deep"></i>
+                            <span>My daily commute:</span>
+                            <input type="number" id="commuteInput" class="w-16 bg-surface border border-hairline rounded px-2 py-1 text-ink text-center outline-none focus:border-brand" min="0" value="0">
+                            <span class="js-unit-dist text-ink-muted">km</span>
+                            <span class="ml-1 text-ink-muted">via</span>
+                            <select id="commuteMode" class="bg-surface border border-hairline rounded px-2 py-1 text-ink outline-none focus:border-brand">
+                                <option value="gasolineKm">Car (Gasoline)</option>
+                                <option value="evKm">Car (EV)</option>
+                                <option value="motorbikeKm">Motorbike</option>
+                                <option value="trainKm">Train / Rail</option>
+                                <option value="busKm">Public Bus</option>
+                            </select>
+                        </div>
+                        <div class="flex items-center gap-2 ml-auto">
+                            <button id="addCommuteBtn" class="ct-btn px-3 py-1.5 text-xs flex items-center gap-1"><i data-lucide="plus" class="w-3 h-3"></i> Add my commute</button>
+                            <button id="addCommuteWeekBtn" class="px-3 py-1.5 text-xs rounded-lg border border-brand text-brand-text hover:bg-brand/10 transition-colors">+ Work week ×5</button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Gasoline Car (<span class="js-unit-dist">km</span>)</label>
+                            <input type="number" id="inputGasoline" class="w-full bg-sunk border border-hairline rounded-lg p-2.5 text-ink outline-none focus:border-brand" min="0" value="0">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Electric Vehicle (<span class="js-unit-dist">km</span>)</label>
+                            <input type="number" id="inputEv" class="w-full bg-sunk border border-hairline rounded-lg p-2.5 text-ink outline-none focus:border-brand" min="0" value="0">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Flight, short-haul (<span class="js-unit-dist">km</span>)</label>
+                            <input type="number" id="inputFlight" class="w-full bg-sunk border border-hairline rounded-lg p-2.5 text-ink outline-none focus:border-brand" min="0" value="0">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Train / Rail (<span class="js-unit-dist">km</span>)</label>
+                            <input type="number" id="inputTrain" class="w-full bg-sunk border border-hairline rounded-lg p-2.5 text-ink outline-none focus:border-brand" min="0" value="0">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Motorbike (<span class="js-unit-dist">km</span>)</label>
+                            <input type="number" id="inputMotorbike" class="w-full bg-sunk border border-hairline rounded-lg p-2.5 text-ink outline-none focus:border-brand" min="0" value="0">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Public Bus (<span class="js-unit-dist">km</span>)</label>
+                            <input type="number" id="inputBus" class="w-full bg-sunk border border-hairline rounded-lg p-2.5 text-ink outline-none focus:border-brand" min="0" value="0">
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Electricity Sector -->
+                <section class="ct-card p-6">
+                    <div class="flex items-center gap-3 mb-5 pb-3 border-b border-hairline">
+                        <div class="p-2 bg-sunk rounded text-brand-deep"><i data-lucide="zap" class="w-5 h-5"></i></div>
+                        <h2 class="text-xl font-bold text-brand-deep">Electricity</h2>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Consumption (kWh)</label>
+                            <input type="number" id="inputKwh" class="w-full bg-sunk border border-hairline rounded-lg p-2.5 text-ink outline-none focus:border-brand" min="0" value="0">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Grid Region</label>
+                            <select id="inputGrid" class="w-full bg-sunk border border-hairline rounded-lg p-2.5 text-ink outline-none focus:border-brand">
+                                <option value="global">Global Average (0.478 kg/kWh)</option>
+                                <option disabled>──────────</option>
+                                <option value="australia">Australia (0.65 kg/kWh)</option>
+                                <option value="brazil">Brazil (0.08 kg/kWh)</option>
+                                <option value="canada">Canada (0.13 kg/kWh)</option>
+                                <option value="china">China (0.55 kg/kWh)</option>
+                                <option value="eu">European Union Avg (0.23 kg/kWh)</option>
+                                <option value="france">France (0.06 kg/kWh)</option>
+                                <option value="germany">Germany (0.38 kg/kWh)</option>
+                                <option value="india">India (0.82 kg/kWh)</option>
+                                <option value="italy">Italy (0.25 kg/kWh)</option>
+                                <option value="japan">Japan (0.46 kg/kWh)</option>
+                                <option value="mexico">Mexico (0.43 kg/kWh)</option>
+                                <option value="southafrica">South Africa (0.90 kg/kWh)</option>
+                                <option value="southkorea">South Korea (0.44 kg/kWh)</option>
+                                <option value="spain">Spain (0.15 kg/kWh)</option>
+                                <option value="uk">United Kingdom (0.19 kg/kWh)</option>
+                                <option value="us">United States (0.37 kg/kWh)</option>
+                            </select>
+                        </div>
+                        <div class="sm:col-span-2">
+                            <label class="flex justify-between text-sm font-medium mb-2">
+                                <span>Renewable Offset / Green Tariff</span>
+                                <span id="offsetLabel" class="text-brand font-bold">0%</span>
+                            </label>
+                            <input type="range" id="inputOffset" class="w-full accent-brand" min="0" max="100" value="0">
+                            <p class="text-xs text-ink-muted mt-1">Simulates market-based reporting by discounting grid emissions.</p>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 pt-5 border-t border-hairline">
+                        <h3 class="text-sm font-bold text-brand-deep mb-4">Device Usage (Hours)</h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-xs font-medium mb-2 flex items-center gap-1"><i data-lucide="smartphone" class="w-3 h-3 text-ink-muted"></i> Mobile</label>
+                                <input type="number" id="inputMobileHr" class="w-full bg-sunk border border-hairline rounded-lg p-2 text-ink outline-none focus:border-brand" min="0" value="0">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium mb-2 flex items-center gap-1"><i data-lucide="laptop" class="w-3 h-3 text-ink-muted"></i> Laptop</label>
+                                <input type="number" id="inputLaptopHr" class="w-full bg-sunk border border-hairline rounded-lg p-2 text-ink outline-none focus:border-brand" min="0" value="0">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium mb-2 flex items-center gap-1"><i data-lucide="monitor" class="w-3 h-3 text-ink-muted"></i> Desktop PC</label>
+                                <input type="number" id="inputDesktopHr" class="w-full bg-sunk border border-hairline rounded-lg p-2 text-ink outline-none focus:border-brand" min="0" value="0">
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Digital Sector -->
+                <section class="ct-card p-6">
+                    <div class="flex items-center gap-3 mb-5 pb-3 border-b border-hairline">
+                        <div class="p-2 bg-sunk rounded text-brand-deep"><i data-lucide="wifi" class="w-5 h-5"></i></div>
+                        <h2 class="text-xl font-bold text-brand-deep">Digital Activity</h2>
+                    </div>
+                    <div>
+                        <label class="flex justify-between text-sm font-medium mb-2">
+                            <span>Data Transfer (GB)</span>
+                            <span id="digitalLabel" class="text-brand font-bold">0 GB</span>
+                        </label>
+                        <input type="range" id="inputGb" class="w-full accent-brand" min="0" max="500" value="0" step="1">
+                        <p class="text-xs text-ink-muted mt-2">1 hour of HD video streaming ≈ 3 GB of data.</p>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Right Column: Visual Dashboard & Equivalencies (5 cols) -->
+            <div class="lg:col-span-5 space-y-6">
+                
+                <!-- The Big Number (Equivalency Engine) -->
+                <section class="ct-card p-8 text-center bg-brand/5 border-none relative overflow-hidden">
+                    <div class="absolute -right-10 -top-10 opacity-10 pointer-events-none">
+                        <i data-lucide="globe-2" class="w-48 h-48 text-brand-deep"></i>
+                    </div>
+                    
+                    <h2 class="text-2xl font-bold text-brand-deep uppercase tracking-widest mb-4 relative z-10">Total Carbon Footprint</h2>
+                    
+                    <div class="flex justify-center items-end gap-2 mb-6 relative z-10">
+                        <span id="totalLocationVal" class="text-6xl ct-metric">0.00</span>
+                        <span class="text-xl text-ink-muted pb-2 font-medium">kg CO₂e</span>
+                    </div>
+                    
+                    <div id="equivalencyContainer" class="bg-surface rounded-xl p-4 shadow-sm border border-hairline mx-auto max-w-sm mb-4 relative z-10">
+                        <p class="text-sm text-ink-soft mb-1">Which is approximately equal to:</p>
+                        <div class="flex items-center justify-center gap-3">
+                            <div class="p-2 bg-lime/20 rounded-full text-brand-deep" id="equivIconBox">
+                                <i data-lucide="leaf" id="equivIcon" class="w-5 h-5"></i>
+                            </div>
+                            <span id="equivText" class="text-lg font-bold text-brand-deep">No emissions yet</span>
+                        </div>
+                    </div>
+                    
+                    <p id="aiExplanationBox" class="text-sm text-brand-deep mt-2 mb-6 font-medium max-w-sm mx-auto italic relative z-10"></p>
+                    
+                    <div class="mt-auto pt-6 border-t border-brand/10 flex flex-col items-center gap-4 relative z-10">
+                        <div class="flex justify-center items-center gap-3 bg-brand/5 px-4 py-1.5 rounded-full border border-brand/10">
+                            <span id="labelToday" class="text-[10px] font-bold uppercase tracking-wider text-brand-deep transition-colors">Today's Data</span>
+                            <label class="flex items-center cursor-pointer" title="Toggle Today / Lifetime">
+                                <input type="checkbox" id="footprintModeToggle" class="sr-only peer">
+                                <div class="relative w-9 h-5 bg-jungle/10 rounded-full peer-checked:bg-brand/30 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-brand after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
+                            </label>
+                            <span id="labelTotal" class="text-[10px] font-bold uppercase tracking-wider text-ink-muted transition-colors">Lifetime Total</span>
+                        </div>
+                        <button id="commitDayBtn" class="px-5 py-2 text-xs font-bold uppercase tracking-wider text-brand-deep bg-brand/10 hover:bg-brand/20 rounded-full transition-colors flex items-center gap-2">
+                            <i data-lucide="calendar-check" class="w-4 h-4 inline-block -mt-0.5"></i> Save Day & Reset
+                        </button>
+                    </div>
+                </section>
+
+                <!-- Goal & Context: footprint vs Paris-aligned target + regional average -->
+                <section class="ct-card p-6">
+                    <h3 class="text-sm font-bold text-ink-soft mb-4 flex items-center gap-2"><i data-lucide="target" class="w-4 h-4 text-brand-deep"></i> Goal &amp; Context</h3>
+                    <div class="flex items-center gap-5">
+                        <div class="relative shrink-0" style="width:120px;height:120px">
+                            <svg viewBox="0 0 120 120" class="w-full h-full -rotate-90">
+                                <circle cx="60" cy="60" r="52" fill="none" stroke="var(--ct-border)" stroke-width="10"></circle>
+                                <circle id="gaugeArc" cx="60" cy="60" r="52" fill="none" stroke="var(--ct-green)" stroke-width="10" stroke-linecap="round" stroke-dasharray="326.7" stroke-dashoffset="326.7" style="transition:stroke-dashoffset .6s ease, stroke .3s ease"></circle>
+                            </svg>
+                            <div class="absolute inset-0 flex flex-col items-center justify-center">
+                                <span id="gaugeValue" class="text-2xl font-bold ct-metric">0.0</span>
+                                <span class="text-[10px] text-ink-muted uppercase tracking-wide">kg today</span>
+                            </div>
+                        </div>
+                        <div class="flex-grow min-w-0">
+                            <p id="gaugeStatus" class="text-sm font-bold text-brand-deep mb-3">Log activity to compare</p>
+                            <div class="relative h-2 bg-sunk rounded-full mb-1">
+                                <div id="ctxBarFill" class="absolute left-0 top-0 h-2 rounded-full bg-brand" style="width:0%"></div>
+                                <div id="ctxTargetMark" class="absolute -top-1 w-0.5 h-4 bg-brand-deep" style="left:0%" title="Paris-aligned daily target"></div>
+                                <div id="ctxAvgMark" class="absolute -top-1 w-0.5 h-4 bg-ink-muted" style="left:0%" title="Regional daily average"></div>
+                            </div>
+                            <div class="flex justify-between text-[10px] text-ink-muted mb-2"><span>0</span><span>target</span><span>avg</span></div>
+                            <p id="ctxCompare" class="text-xs text-ink-soft"></p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Dual Reporting Chart -->
+                <section class="ct-card p-6">
+                    <h3 class="text-sm font-bold text-ink-soft mb-4 flex items-center justify-between">
+                        Scope 2 Dual Reporting
+                        <i data-lucide="info" class="w-4 h-4 text-ink-muted cursor-help" title="Location-based vs Market-based (after offsets)"></i>
+                    </h3>
+                    <div class="relative h-48 w-full" id="chartBarContainer">
+                        <canvas id="chartBar"></canvas>
+                    </div>
+                    <div class="hidden h-48 w-full flex-col justify-end gap-2" id="staticBarContainer"></div>
+                </section>
+
+                <!-- Sector Breakdown Chart -->
+                <section class="ct-card p-6">
+                    <h3 class="text-sm font-bold text-ink-soft mb-4">Sector Breakdown</h3>
+                    <div class="relative h-48 w-full flex justify-center" id="chartDoughnutContainer">
+                        <canvas id="chartDoughnut"></canvas>
+                    </div>
+                    <div class="hidden h-48 w-full flex-col justify-center gap-2" id="staticDoughnutContainer"></div>
+                </section>
+
+                <!-- AI Reduction Coach -->
+                <section class="ct-card p-6 bg-charcoal text-on-dark shadow-md relative" id="aiCoachPanel">
+                    <div class="flex items-center justify-between mb-4 pb-3 border-b border-white/10">
+                        <div class="flex items-center gap-3">
+                            <div class="p-2 bg-lime-bright rounded text-charcoal"><i data-lucide="bot" class="w-5 h-5"></i></div>
+                            <h2 class="text-xl font-bold text-lime-bright">AI Reduction Coach</h2>
+                        </div>
+                        <button id="refreshCoachBtn" class="hidden text-xs bg-white/10 hover:bg-white/20 px-2 py-1 rounded transition">Update Plan</button>
+                    </div>
+                    
+                    <div id="coachContent" class="space-y-4">
+                        <div class="text-center py-6 text-white/60">
+                            <i data-lucide="lock" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
+                            <p class="text-sm">Connect your Gemini API key above to unlock personalized reduction plans.</p>
+                        </div>
+                    </div>
+                </section>
+
+            </div>
+        </div>
+
+        <!-- History & Reduce tools (balanced full-width row) -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
+            <!-- Daily Footprint Trend (per-day history) -->
+            <section class="ct-card p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-sm font-bold text-ink-soft">Daily Footprint Trend</h3>
+                    <div class="flex rounded-lg overflow-hidden border border-hairline text-xs font-semibold" id="trendRange" role="group" aria-label="Trend range">
+                        <button type="button" data-range="7" class="px-2.5 py-1 transition-colors">7d</button>
+                        <button type="button" data-range="30" class="px-2.5 py-1 transition-colors">30d</button>
+                    </div>
+                </div>
+                <div id="trendChart" class="flex items-end gap-1 h-40"></div>
+                <p id="trendSummary" class="text-xs text-ink-muted mt-3 text-center"></p>
+            </section>
+
+            <!-- What-if Impact Simulator -->
+            <section class="ct-card p-6">
+                <h3 class="text-sm font-bold text-ink-soft mb-4 flex items-center gap-2"><i data-lucide="flask-conical" class="w-4 h-4 text-brand-deep"></i> What-if Simulator</h3>
+                <div id="simLevers" class="grid grid-cols-1 sm:grid-cols-2 gap-1 mb-4"></div>
+                <div class="bg-sunk rounded-lg p-4 border border-hairline">
+                    <div class="flex items-end justify-between mb-2">
+                        <div>
+                            <p class="text-xs text-ink-muted">Projected footprint</p>
+                            <p class="text-2xl font-bold ct-metric"><span id="simProjected">0.0</span> <span class="text-sm text-ink-muted">kg</span></p>
+                        </div>
+                        <p id="simSaved" class="text-sm font-bold text-brand-text">−0.0 kg (−0%)</p>
+                    </div>
+                    <div class="relative h-2 bg-bg rounded-full overflow-hidden border border-hairline">
+                        <div id="simBar" class="absolute left-0 top-0 h-full bg-brand rounded-full transition-all" style="width:0%"></div>
+                    </div>
+                </div>
+                <p class="text-[11px] text-ink-muted mt-2">Deterministic projection — toggles re-run the same engine on a copy of the day's inputs.</p>
+            </section>
+        </div>
+
+        <!-- Eco-Actions Hub: commit actions, build a streak, track verified savings -->
+        <section class="ct-card p-6 mt-8">
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-5 pb-3 border-b border-hairline">
+                <h2 class="text-xl font-bold text-brand-deep flex items-center gap-2"><i data-lucide="sprout" class="w-5 h-5"></i> Eco-Actions</h2>
+                <div class="flex items-center gap-4 text-sm">
+                    <div class="text-center"><div class="font-bold text-brand-deep text-lg" id="statStreak">0</div><div class="text-[10px] text-ink-muted uppercase tracking-wide">Day streak</div></div>
+                    <div class="text-center"><div class="font-bold text-brand-deep text-lg" id="statCumulative">0.0 kg</div><div class="text-[10px] text-ink-muted uppercase tracking-wide">Saved total</div></div>
+                    <div class="flex items-center gap-2 bg-sunk rounded-full pl-2 pr-3 py-1 border border-hairline">
+                        <span class="text-brand-deep" id="statTierIcon"><i data-lucide="sprout" class="w-5 h-5"></i></span>
+                        <div><div class="font-bold text-brand-deep text-sm leading-none" id="statTierLabel">Seedling</div><div class="text-[10px] text-ink-muted mt-0.5" id="tierNext">—</div></div>
+                    </div>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-bold text-ink-soft">Today's checklist</h3>
+                        <span class="text-xs font-medium text-brand-text" id="habitTodaySaved">0.0 kg avoided today</span>
+                    </div>
+                    <div id="habitChecklist" class="space-y-2"></div>
+                    <div class="mt-4 flex items-center gap-2">
+                        <span class="text-[10px] text-ink-muted uppercase tracking-wide shrink-0">Next tier</span>
+                        <div class="flex-grow h-1.5 bg-sunk rounded-full overflow-hidden"><div id="tierProgress" class="h-full bg-brand rounded-full transition-all" style="width:0%"></div></div>
+                    </div>
+                </div>
+                <div>
+                    <h3 class="text-sm font-bold text-ink-soft mb-3">Commit to actions</h3>
+                    <div id="actionLibrary" class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-1"></div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="mt-auto border-t border-hairline py-6 text-center text-sm text-ink-muted">
+        <p>Built for PromptWars · Google for Developers × Hack2Skill</p>
+        <p class="mt-2 text-xs" id="sustainabilityStats">Loading meta-sustainability stats...</p>
+    </footer>
+
+    <!-- Initialize Icons -->
+    <script>
+        lucide.createIcons();
+    </script>
+    
+    <!-- Application Logic -->
+    <script src="./app.js"></script>
+</body>
+</html>

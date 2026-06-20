@@ -1,0 +1,214 @@
+/* ============================================================================
+   CarbonTrack AI — "Deep Jungle" theme tokens
+   Source palette: colors.jpg (UI Color Collective · Deep Jungle)
+     #8EBF24  lime      #548C1C  green     #2E590E  olive
+     #0C2605  deep      #010D00  near-black
+   Direction: slightly offwhite background, green = environmental tone,
+   palette black used as a softened charcoal. Raw lime is kept for fills
+   only (too low-contrast as text on white); near-black text is softened
+   to a charcoal-green so it's easy on the eyes.
+   ============================================================================ */
+
+:root {
+  /* — Surfaces — */
+  --ct-bg:           #F5F8F0;  /* page: slightly offwhite, faint green cast   */
+  --ct-surface:      #FFFFFF;  /* cards / elevated panels                     */
+  --ct-surface-sunk: #ECF1E3;  /* inset wells, table stripes, disabled        */
+  --ct-border:       #DCE6CE;  /* hairline ≈ rgba(46,89,14,.18)               */
+
+  /* — Charcoal blacks (from palette) — */
+  --ct-charcoal:     #0C2605;  /* dark surfaces: header, footer, code blocks  */
+  --ct-black:        #010D00;  /* deepest: shadows, overlays, scrims          */
+
+  /* — Text (charcoal-green, not pure black) — */
+  --ct-ink:          #16240E;  /* primary text            ~14:1 on --ct-bg    */
+  --ct-ink-soft:     #46583A;  /* secondary text                              */
+  --ct-ink-muted:    #6B7D5E;  /* captions, placeholders                      */
+  --ct-on-dark:      #EAF1DD;  /* text on charcoal surfaces                   */
+
+  /* — Greens (environmental tone) — */
+  --ct-green:        #548C1C;  /* brand / primary accent                      */
+  --ct-green-text:   #3F6B14;  /* AA green text on white (~5.8:1)             */
+  --ct-green-deep:   #2E590E;  /* headings, pressed states                    */
+  --ct-lime:         #8EBF24;  /* highlight, chart fills, progress, hover glow*/
+  --ct-lime-bright:  #A6D62E;  /* lifted lime for use on charcoal surfaces    */
+
+  /* Channel-triplet forms so Tailwind alpha utilities (bg-brand/5 etc.) work */
+  --ct-green-rgb:    84 140 28;
+  --ct-lime-rgb:     142 191 36;
+
+  /* — Actions — */
+  --ct-action-bg:    #3F6B14;  /* button bg (white text ~5.8:1 AA)            */
+  --ct-action-hover: #2E590E;  /* button hover                                */
+  --ct-focus-ring:   rgba(84,140,28,0.45);
+
+  /* — Data-viz sequence (Travel / Electricity / Digital / extra) — */
+  --ct-viz-1: #2E590E;
+  --ct-viz-2: #548C1C;
+  --ct-viz-3: #8EBF24;
+  --ct-viz-4: #0C2605;
+
+  /* — Feedback — */
+  --ct-positive: #548C1C;  /* improvement / savings */
+  --ct-warning:  #B5860B;  /* climate-cost speed-bump (amber, kept off-palette
+                              so it reads as a warning against the greens) */
+}
+
+/* ----------------------------------------------------------------------------
+   Dark mode — same Deep Jungle palette, inverted.
+   The palette's near-blacks (#010D00 / #0C2605) become the surfaces, and lime
+   (#8EBF24 / brightened #A6D62E) carries text/accent — the deep greens are too
+   dark to read on a dark ground. Activates via [data-theme="dark"] / .dark, or
+   automatically by system preference when no explicit theme is set.
+   ---------------------------------------------------------------------------- */
+:root[data-theme="dark"],
+.dark {
+  /* — Surfaces (palette blacks) — */
+  --ct-bg:           #010D00;  /* page: deepest jungle black                   */
+  --ct-surface:      #0C2605;  /* cards: charcoal green                        */
+  --ct-surface-sunk: #061503;  /* inset wells, stripes                         */
+  --ct-border:       #234017;  /* hairline ≈ rgba(142,191,36,.16)             */
+
+  /* — Charcoal references flip to lifted panels — */
+  --ct-charcoal:     #0C2605;  /* "dark surface" already is the theme ground   */
+  --ct-black:        #000300;  /* deepest: shadows, overlays                   */
+
+  /* — Text (offwhite → green-tinted) — */
+  --ct-ink:          #EAF1DD;  /* primary text            ~16:1 on --ct-bg     */
+  --ct-ink-soft:     #B6C7A4;  /* secondary text                              */
+  --ct-ink-muted:    #7E906C;  /* captions, placeholders                      */
+  --ct-on-dark:      #EAF1DD;  /* (surfaces are already dark)                  */
+
+  /* — Greens (lime leads on dark) — */
+  --ct-green:        #8EBF24;  /* brand / primary accent                      */
+  --ct-green-text:   #A6D62E;  /* AA accent text on dark (~13:1)              */
+  --ct-green-deep:   #B6E04A;  /* headings — lifted so they read on dark      */
+  --ct-lime:         #8EBF24;  /* highlight, chart fills, progress, glow       */
+  --ct-lime-bright:  #A6D62E;  /* lifted lime                                  */
+
+  /* Channel-triplet forms (brand leads with lime on dark) */
+  --ct-green-rgb:    142 191 36;
+  --ct-lime-rgb:     142 191 36;
+
+  /* — Actions (lime fill, charcoal label) — */
+  --ct-action-bg:    #8EBF24;
+  --ct-action-hover: #A6D62E;
+  --ct-action-ink:   #0C2605;  /* dark label on lime button (~9:1)            */
+  --ct-focus-ring:   rgba(142,191,36,0.55);
+
+  /* — Data-viz sequence (brightened for dark) — */
+  --ct-viz-1: #A6D62E;
+  --ct-viz-2: #8EBF24;
+  --ct-viz-3: #548C1C;
+  --ct-viz-4: #3F6B14;
+
+  /* — Feedback — */
+  --ct-positive: #8EBF24;
+  --ct-warning:  #E0A92E;  /* brightened amber for dark ground */
+}
+
+/* System-preference fallback when the app hasn't set an explicit theme */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="dark"]) {
+    --ct-bg:           #010D00;
+    --ct-surface:      #0C2605;
+    --ct-surface-sunk: #061503;
+    --ct-border:       #234017;
+    --ct-charcoal:     #0C2605;
+    --ct-black:        #000300;
+    --ct-ink:          #EAF1DD;
+    --ct-ink-soft:     #B6C7A4;
+    --ct-ink-muted:    #7E906C;
+    --ct-on-dark:      #EAF1DD;
+    --ct-green:        #8EBF24;
+    --ct-green-text:   #A6D62E;
+    --ct-green-deep:   #B6E04A;
+    --ct-lime:         #8EBF24;
+    --ct-lime-bright:  #A6D62E;
+    --ct-green-rgb:    142 191 36;
+    --ct-lime-rgb:     142 191 36;
+    --ct-action-bg:    #8EBF24;
+    --ct-action-hover: #A6D62E;
+    --ct-action-ink:   #0C2605;
+    --ct-focus-ring:   rgba(142,191,36,0.55);
+    --ct-viz-1: #A6D62E;  --ct-viz-2: #8EBF24;
+    --ct-viz-3: #548C1C;  --ct-viz-4: #3F6B14;
+    --ct-positive: #8EBF24;
+    --ct-warning:  #E0A92E;
+  }
+}
+
+/* Light-mode default for the button label var (overridden in dark) */
+:root { --ct-action-ink: #ffffff; }
+
+/* Base wiring */
+body {
+  background: var(--ct-bg);
+  color: var(--ct-ink);
+}
+
+a, .ct-link        { color: var(--ct-green-text); }
+h1, h2, h3, .ct-heading { color: var(--ct-green-deep); }
+.ct-muted          { color: var(--ct-ink-muted); }
+
+.ct-card {
+  background: var(--ct-surface);
+  border: 1px solid var(--ct-border);
+  border-radius: 14px;
+}
+
+/* Charcoal-black surfaces (header / footer / code) */
+.ct-charcoal {
+  background: var(--ct-charcoal);
+  color: var(--ct-on-dark);
+}
+.ct-charcoal a, .ct-charcoal .ct-link { color: var(--ct-lime-bright); }
+
+/* Metric value — the "big number" */
+.ct-metric {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  color: var(--ct-green-deep);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+/* Primary action */
+.ct-btn {
+  background: var(--ct-action-bg);
+  color: var(--ct-action-ink);
+  border: none;
+  border-radius: 10px;
+  transition: background-color .15s ease;
+}
+.ct-btn:hover  { background: var(--ct-action-hover); }
+.ct-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ct-focus-ring);
+}
+
+/* ============================================================================
+   Tailwind (CDN v3) config — paste into the inline <script> before the CDN tag:
+
+   tailwind.config = {
+     theme: { extend: { colors: {
+       bg:        '#F5F8F0',
+       surface:   '#FFFFFF',
+       sunk:      '#ECF1E3',
+       hairline:  '#DCE6CE',
+       charcoal:  '#0C2605',
+       jungle:    '#010D00',
+       ink:       { DEFAULT: '#16240E', soft: '#46583A', muted: '#6B7D5E' },
+       brand:     { DEFAULT: '#548C1C', text: '#3F6B14', deep: '#2E590E' },
+       lime:      { DEFAULT: '#8EBF24', bright: '#A6D62E' },
+     }}}
+   }
+   ============================================================================ */
+
+/* ============================================================================
+   Low-Carbon Mode Overrides
+   ============================================================================ */
+body.low-carbon * {
+  transition: none !important;
+  animation: none !important;
+  font-family: system-ui, -apple-system, sans-serif !important;
+}
